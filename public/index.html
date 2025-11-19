@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hava Durumu Analizi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <style>
+        /* Haritanın tam ekranı kaplaması için */
+        html, body { height: 100%; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        #map { height: 100%; width: 100%; z-index: 10; }
+        .leaflet-div-icon { background: transparent; border: none; }
+        .location-marker {
+            background-color: #3B82F6; /* blue-500 */
+            border-radius: 9999px;
+            padding: 6px;
+            border: 2px solid white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        /* Menü ve Backdrop stilleri */
+        .backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 60; opacity: 0; visibility: hidden; transition: opacity 0.3s ease; }
+        .backdrop.active { opacity: 1; visibility: visible; }
+        .menu-overlay { position: fixed; bottom: 0; left: 0; right: 0; background: #F9FAFB; z-index: 70; transform: translateY(100%); transition: transform 0.3s ease-in-out; border-top-left-radius: 24px; border-top-right-radius: 24px; max-height: 90vh; overflow-y: auto;}
+        .menu-overlay.active { transform: translateY(0); }
+
+        /* Sonuçları göstereceğimiz Modal Stilleri */
+        #resultsModal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3B82F6;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Tarih input'undaki takvim ikonunu gizle */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0.5;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+    <div id="map"></div>
+
+    <!-- ALT BİLGİ ÇUBUĞU -->
+    <div class="absolute bottom-6 left-0 right-0 z-50 flex justify-center pointer-events-none">
+        <div class="bg-white p-4 rounded-xl shadow-xl max-w-md w-full mx-4 text-center">
+            <p class="text-gray-700 mb-3">Hava durumu analizi için haritadan bir bölge seçin.</p>
+            <div class="flex justify-center">
+                <i data-feather="map-pin" class="text-blue-500"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- KARARTMA ARKA PLANI -->
+    <div class="backdrop" id="backdrop"></div>
+
+    <!-- SEÇİM MENÜSÜ -->
+    <div class="menu-overlay" id="menuOverlay">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                 <h2 class="text-2xl font-bold text-gray-800">Analiz Ayarları</h2>
+                <button id="closeMenu" class="p-2 rounded-full hover:bg-gray-200">
+                    <i data-feather="x" class="text-gray-600"></i>
+                </button>
+            </div>
+            <div class="relative bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 mb-6 overflow-hidden">
+                <div class="relative z-10">
+                    <div class="flex items-start">
+                        <div class="bg-white bg-opacity-20 p-3 rounded-lg mr-4">
+                            <i data-feather="map-pin" class="text-white"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-xl mb-1" id="locationTitle">Konum Seçildi</h3>
+                            <p class="text-white text-opacity-90 text-sm" id="locationCoords">Koordinatlar yükleniyor...</p>
+                        </div>
+                    </div>
+                    <!-- DEĞİŞTİRİLEN KISIM BAŞLANGICI -->
+                    <div class="mt-4">
+                        <!-- TARİH VE YIL SEÇİMİ BİRLEŞTİRİLDİ -->
+                        <div>
+                            <label for="eventDate" class="block text-white text-sm font-medium mb-2">Analiz Tarihi ve Yılı:</label>
+                            <input type="date" id="eventDate" class="w-full px-3 py-2 rounded-lg bg-white bg-opacity-20 text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-30 appearance-none">
+                        </div>
+                    </div>
+                    <!-- DEĞİŞTİRİLEN KISIM SONU -->
+                </div>
+            </div>
+            <button id="exploreBtn"
+                class="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 rounded-xl font-medium flex items-center justify-center hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                <span>Şimdi Öğren</span>
+                <i data-feather="arrow-right" class="ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- SONUÇ MODALI -->
+    <div id="resultsModal" class="hidden w-full max-w-lg mx-auto p-4">
+         <div class="bg-white rounded-2xl shadow-2xl p-6 relative">
+            <button id="closeModalBtn" class="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-200">
+                <i data-feather="x" class="text-gray-600"></i>
+            </button>
+            <div id="modalContent">
+                <!-- Yükleniyor animasyonu -->
+                 <div id="loader" class="flex flex-col items-center justify-center p-8">
+                     <div class="spinner mb-4"></div>
+                     <p class="text-gray-600">Veriler analiz ediliyor, lütfen bekleyin...</p>
+                 </div>
+                <!-- Sonuçlar buraya gelecek -->
+                <div id="resultsContent" class="hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Analiz Sonuçları</h2>
+                    <p id="targetYear" class="text-sm text-gray-500 mb-4"></p>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="font-semibold text-lg text-gray-700">Günlük Öngörü</h3>
+                            <p id="assessmentNarrative" class="text-gray-600"></p>
+                        </div>
+                        <div class="border-t pt-4">
+                            <h3 class="font-semibold text-lg text-gray-700">Uzun Vadeli İklim Trendi</h3>
+                            <p id="trendNarrative" class="text-gray-600"></p>
+                        </div>
+                         <div class="border-t pt-4 text-center">
+                            <p id="confidenceNotice" class="text-xs text-gray-400 italic mt-4"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+         </div>
+    </div>
+
+
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            feather.replace();
+
+            // Haritayı başlat
+            const map = L.map('map').setView([39.9334, 32.8597], 6); // Türkiye merkezli
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+            // Elementler
+            const menuOverlay = document.getElementById('menuOverlay');
+            const backdrop = document.getElementById('backdrop');
+            const closeMenu = document.getElementById('closeMenu');
+            const exploreBtn = document.getElementById('exploreBtn');
+            const locationCoords = document.getElementById('locationCoords');
+            const eventDateInput = document.getElementById('eventDate');
+            // targetYearSelect elementi kaldırıldı
+
+            const resultsModal = document.getElementById('resultsModal');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const loader = document.getElementById('loader');
+            const resultsContent = document.getElementById('resultsContent');
+
+            let clickedLocation = null;
+            let marker = null;
+
+            // Tarih girdisi için minimum yılı ayarla (geçmiş verileri engelle)
+            const nextYear = new Date().getFullYear() + 1;
+            eventDateInput.min = `${nextYear}-01-01`;
+
+
+            function openMenu() {
+                menuOverlay.classList.add('active');
+                backdrop.classList.add('active');
+            }
+
+            function closeMenuAndModal() {
+                menuOverlay.classList.remove('active');
+                backdrop.classList.remove('active');
+                resultsModal.classList.add('hidden');
+            }
+
+            // Haritaya tıklama olayı
+            map.on('click', function (e) {
+                if (marker) map.removeLayer(marker);
+                
+                marker = L.marker(e.latlng, {
+                    icon: L.divIcon({
+                        className: 'location-marker',
+                        html: '<i data-feather="map-pin" class="text-white" style="width: 14px; height: 14px;"></i>',
+                        iconSize: [24, 24]
+                    })
+                }).addTo(map);
+                feather.replace();
+
+                clickedLocation = e.latlng;
+                locationCoords.textContent = `Enlem: ${e.latlng.lat.toFixed(4)} | Boylam: ${e.latlng.lng.toFixed(4)}`;
+                
+                validateInputs();
+                openMenu();
+            });
+            
+            // Girdilerin dolu olup olmadığını kontrol et ve butonu ona göre ayarla
+            function validateInputs() {
+                 // targetYearSelect kontrolü kaldırıldı
+                 exploreBtn.disabled = !eventDateInput.value || !clickedLocation;
+            }
+            eventDateInput.addEventListener('input', validateInputs);
+
+
+            // Menüyü kapatma butonları
+            closeMenu.addEventListener('click', closeMenuAndModal);
+            backdrop.addEventListener('click', closeMenuAndModal);
+            closeModalBtn.addEventListener('click', closeMenuAndModal);
+
+
+            // "Şimdi Öğren" butonuna tıklama olayı
+            exploreBtn.addEventListener('click', async function () {
+                // targetYearSelect kontrolü kaldırıldı
+                if (!clickedLocation || !eventDateInput.value) {
+                    return;
+                }
+
+                menuOverlay.classList.remove('active');
+                resultsModal.classList.remove('hidden');
+                loader.classList.remove('hidden');
+                resultsContent.classList.add('hidden');
+
+                const date = new Date(eventDateInput.value);
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const targetYear = date.getFullYear(); // Yıl, tarih girdisinden alınıyor
+                console.log(targetYear);
+
+                try {
+                    const response = await fetch('/analyze-weather', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            latitude: clickedLocation.lat,
+                            longitude: clickedLocation.lng,
+                            month: month,
+                            day: day,
+                            targetYear: targetYear // Seçilen yılı sunucuya gönder
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`Sunucu hatası: ${response.statusText}`);
+                    
+                    const data = await response.json();
+
+                    document.getElementById('targetYear').textContent = `${data.target_year} yılı için öngörülen veriler:`;
+                    document.getElementById('assessmentNarrative').innerHTML = data.assessment.full_narrative;
+                    document.getElementById('trendNarrative').innerHTML = data.climate_trend.full_narrative;
+                    document.getElementById('confidenceNotice').textContent = data.confidence_notice;
+
+                    loader.classList.add('hidden');
+                    resultsContent.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error('Analiz sırasında hata:', error);
+                    loader.classList.add('hidden');
+                    resultsContent.innerHTML = `<p class="text-red-500 text-center">Analiz sırasında bir hata oluştu. Lütfen daha sonra tekrar deneyin.</p>`;
+                    resultsContent.classList.remove('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
