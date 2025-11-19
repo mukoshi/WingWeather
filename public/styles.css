@@ -1,0 +1,133 @@
+/* Genel Harita Stili */
+#map {
+  height: 100vh;
+  width: 100%;
+  z-index: 1;
+}
+
+/* Konum İşaretçisi Stili */
+.location-marker {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* İşaretçinin İç Dairesi ve Animasyonu */
+.location-marker::before {
+  content: '';
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  background-color: #5E97F6;
+  box-shadow: 0 0 10px rgba(94, 151, 246, 0.8), 0 0 0 4px rgba(94, 151, 246, 0.3);
+  animation: pulse 2s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+/* Geliştirilmiş Animasyon */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 10px rgba(94, 151, 246, 0.8), 0 0 0 4px rgba(94, 151, 246, 0.3);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(94, 151, 246, 1), 0 0 0 8px rgba(94, 151, 246, 0);
+  }
+}
+
+/* Menü Katmanı (Liquid Glass Efekti) */
+.menu-overlay {
+  position: fixed;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 95%;
+  max-width: 500px;
+  background: rgba(255, 255, 255, 0.15); /* Yarı saydam arka plan */
+  backdrop-filter: blur(20px); /* Arka planı bulanıklaştırma */
+  -webkit-backdrop-filter: blur(20px); /* Safari desteği */
+  border-radius: 28px 28px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.2); /* İnce kenarlık */
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.1), 0 1px 1px rgba(0,0,0,0.05); /* Yumuşak gölge */
+  transition: bottom 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  z-index: 1000;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.menu-overlay.active {
+  bottom: 0;
+}
+
+/* Arka Plan Karartma (Backdrop) */
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease-in-out;
+}
+
+.backdrop.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+
+
+.select {
+  display: grid;
+  grid-template-areas: "select";
+  align-items: center;
+  position: relative;
+
+  background-color: #f0f8ff;  /* yeni arka plan rengi */
+  border: 1px solid var(--select-border);
+  border-radius: 8px;         /* yuvarlak köşeler */
+  padding: 0.15em 0.4em;       /* biraz daha compact padding */
+
+  font-size: 0.875rem;         /* metin boyutu küçültüldü */
+  cursor: pointer;
+  line-height: 1.1;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.select select,
+.select::after {
+  grid-area: select;
+}
+
+.select:not(.select--multiple)::after {
+  content: "";
+  justify-self: end;
+  width: 0.8em;
+  height: 0.5em;
+  background-color: var(--select-arrow);
+  clip-path: polygon(100% 0%, 0 0%, 50% 100%);
+}
+
+.select select {
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* focus sınırı koru (eğer varsa) */
+select:focus + .focus {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  border: 2px solid var(--select-focus);
+  border-radius: inherit;
+}
